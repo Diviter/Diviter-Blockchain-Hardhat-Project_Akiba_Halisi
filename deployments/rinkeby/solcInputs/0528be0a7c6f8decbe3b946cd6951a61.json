@@ -1,0 +1,44 @@
+{
+  "language": "Solidity",
+  "sources": {
+    "contracts/AkibaHalisiFund.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport \"./AkibaHalisi.sol\";\nimport \"@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol\";\nimport \"./priceConverter.sol\";\n\n// 3. Interfaces, Libraries, Contracts\n\ncontract AkibaFunds is AkibaHalisi {\n    using priceInterface for uint256;\n\n    uint256 public constant premiumInUSD = 50 * 10**18;\n    address[] private Insureds;\n    mapping(address => uint256) public addressToPremiumDeposited;\n    AggregatorV3Interface public s_priceFeed;\n\n    constructor(address priceFeed) {\n        s_priceFeed = AggregatorV3Interface(priceFeed);\n        i_Owner = msg.sender;\n    }\n\n    /*\n    The functions needs:\n    - abi of the price conversaton rate contract\n    - address- from the chainlink data feeds ehtereum testnet (0x8A753747A1Fa494EC906cE90E9f37563A8AF630e)\n    - choose a network to work with from the data.chain.link (rinkeyby)\n    */\n\n    function Deposit() public payable {\n        require(\n            msg.value.getConversionRate(s_priceFeed) >= premiumInUSD,\n            \"insuffient Amount\"\n        );\n\n        // we are not passing a variable even though it is expected (uint256 ethAmount) this is because msg.value is the first variable recognised.\n        addressToPremiumDeposited[msg.sender] += msg.value;\n        Insureds.push(msg.sender);\n    }\n\n    function getVersion() public view returns (uint256) {\n        return s_priceFeed.version();\n    }\n\n    // creating a loop for withdraw function such that anytime premiums are send to th account it is withdrawn and reset to the initial default number of the address.\n    function withdraw() public onlyOwner {\n        for (\n            uint256 insuredIndex = 0;\n            insuredIndex < Insureds.length;\n            insuredIndex++\n        ) {\n            address insured = Insureds[insuredIndex];\n            addressToPremiumDeposited[insured] = 0;\n        }\n\n        //resetting the array\n        Insureds = new address[](0);\n\n        //call\n        (bool callSuccessful, ) = payable(msg.sender).call{\n            value: address(this).balance\n        }(\"\");\n        require(callSuccessful, \"call failed\");\n    }\n}\n"
+    },
+    "contracts/AkibaHalisi.sol": {
+      "content": "//SPDX-License-Identifier:MIT\npragma solidity ^0.8.0;\n\n/**@title A sample Funding Contract\n * @author Michael Diviter\n * @notice This contract is for creating a sample funding contract\n * @dev This implements price feeds as our library\n */\n//create a smart contract by the name akibaHalisi\n//the contract should be able to create and store usersaccount\n//users should be able to deposit and withdraw funds(after a required time stamp is reached\n\ncontract AkibaHalisi {\n    address public i_Owner;\n\n    uint256 accountNumber;\n\n    modifier onlyOwner() {\n        require(i_Owner == msg.sender);\n        _;\n    }\n\n    struct UserAccount {\n        string userName;\n        uint256 userId;\n        uint256 phoneNumber;\n    }\n\n    UserAccount[] useraccount;\n    mapping(string => uint256) public userNameToUserId;\n\n    function storeAccount(uint256 _accountNumber) public {\n        accountNumber = _accountNumber;\n    }\n\n    function retrieve() public view returns (uint256) {\n        return accountNumber;\n    }\n\n    function createUserAccount(\n        string memory _userName,\n        uint256 _userId,\n        uint256 _phoneNumber\n    ) public onlyOwner {\n        useraccount.push(UserAccount(_userName, _userId, _phoneNumber));\n        userNameToUserId[_userName] = _userId;\n    }\n}\n"
+    },
+    "contracts/priceConverter.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\nimport \"@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol\";\n\n// Why is this a library and not abstract?\n// Why not an interface?\n\nlibrary priceInterface {\n    // We could make this public, but then we'd have to deploy it\n    function getPrice(AggregatorV3Interface priceFeed)\n        internal\n        view\n        returns (uint256)\n    {\n        // Rinkeby ETH / USD Address\n        // https://docs.chain.link/docs/ethereum-addresses/\n        (, int256 answer, , , ) = priceFeed.latestRoundData();\n        // ETH/USD rate in 18 digit\n        return uint256(answer * 10000000000);\n    }\n\n    // 1000000000\n    function getConversionRate(\n        uint256 ethAmount,\n        AggregatorV3Interface priceFeed\n    ) internal view returns (uint256) {\n        uint256 ethPrice = getPrice(priceFeed);\n        uint256 ethAmountInUsd = (ethPrice * ethAmount) / 1000000000000000000;\n        // the actual ETH/USD conversion rate, after adjusting the extra 0s.\n        return ethAmountInUsd;\n    }\n}\n"
+    },
+    "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol": {
+      "content": "// SPDX-License-Identifier: MIT\npragma solidity ^0.8.0;\n\ninterface AggregatorV3Interface {\n  function decimals() external view returns (uint8);\n\n  function description() external view returns (string memory);\n\n  function version() external view returns (uint256);\n\n  // getRoundData and latestRoundData should both raise \"No data present\"\n  // if they do not have data to report, instead of returning unset values\n  // which could be misinterpreted as actual reported values.\n  function getRoundData(uint80 _roundId)\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n\n  function latestRoundData()\n    external\n    view\n    returns (\n      uint80 roundId,\n      int256 answer,\n      uint256 startedAt,\n      uint256 updatedAt,\n      uint80 answeredInRound\n    );\n}\n"
+    }
+  },
+  "settings": {
+    "optimizer": {
+      "enabled": false,
+      "runs": 200
+    },
+    "outputSelection": {
+      "*": {
+        "*": [
+          "abi",
+          "evm.bytecode",
+          "evm.deployedBytecode",
+          "evm.methodIdentifiers",
+          "metadata",
+          "devdoc",
+          "userdoc",
+          "storageLayout",
+          "evm.gasEstimates"
+        ],
+        "": [
+          "ast"
+        ]
+      }
+    },
+    "metadata": {
+      "useLiteralContent": true
+    }
+  }
+}
